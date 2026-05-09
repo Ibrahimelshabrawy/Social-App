@@ -3,6 +3,8 @@ import authService from "./auth.service";
 import {Validation} from "../../common/middlewares/validation";
 import * as authValidation from "./auth.validation";
 import {authentication} from "../../common/middlewares/authentication.middleware";
+import {multerCloud} from "../../common/middlewares/multer";
+import {MulterEnum, StoreEnum} from "../../common/enum/multer.enum";
 const authRouter = Router();
 
 authRouter.post(
@@ -32,5 +34,6 @@ authRouter.post(
 
 authRouter.post("/logout", authentication, authService.logout);
 authRouter.post("/signup/gmail", authService.signUpWithGmail);
+authRouter.post("/test", authentication, authService.test);
 
 export default authRouter;

@@ -10,10 +10,13 @@ export interface IUser {
   password: string;
   phone?: string;
   address?: string;
+  profilePicture?: string;
   gender?: GenderEnum;
   provider?: ProviderEnum;
   role?: RoleEnum;
   confirmed?: Boolean;
+  friends?: Types.ObjectId[];
+
   changeCredential: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -37,13 +40,17 @@ const userSchema = new Schema<IUser>(
     },
     email: {
       type: String,
-      required: true,
+      required: function (): boolean {
+        return this.provider == ProviderEnum.local ? true : false;
+      },
       trim: true,
       unique: true,
     },
     password: {
       type: String,
-      required: true,
+      required: function (): boolean {
+        return this.provider == ProviderEnum.local ? true : false;
+      },
       trim: true,
       min: 3,
       max: 25,
@@ -63,10 +70,15 @@ const userSchema = new Schema<IUser>(
       enum: GenderEnum,
       default: GenderEnum.male,
     },
+    friends: {
+      type: [Types.ObjectId],
+      ref: "User",
+    },
     confirmed: Boolean,
     changeCredential: Date,
     age: Number,
     phone: String,
+    profilePicture: String,
   },
   {
     timestamps: true,

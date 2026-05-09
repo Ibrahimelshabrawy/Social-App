@@ -98,7 +98,7 @@ abstract class BaseRepository<TDocument> {
     projection,
     options,
   }: {
-    id: string;
+    id: Types.ObjectId;
     update: UpdateQuery<TDocument>;
     projection?: ProjectionType<TDocument>;
     options?: QueryOptions<TDocument>;
@@ -129,7 +129,7 @@ abstract class BaseRepository<TDocument> {
     id,
     options,
   }: {
-    id: string;
+    id: Types.ObjectId;
     options?: QueryOptions<TDocument>;
   }): Promise<HydratedDocument<TDocument> | null> {
     return this.model
@@ -144,6 +144,52 @@ abstract class BaseRepository<TDocument> {
     filter?: QueryFilter<TDocument>;
   }): Promise<number> {
     return this.model.countDocuments(filter || {});
+  }
+
+  async paginate<T>({
+    page,
+    limit,
+    sort,
+    search,
+    populate,
+  }: {
+    page?: number;
+    limit?: number;
+    sort?: any;
+    populate?: any;
+    search?: QueryFilter<T>;
+  }) {
+    page = +page! || 1;
+    limit = +limit! || 1;
+
+    if (page < 1) page = 1;
+    if (limit < 1) limit = 1;
+
+    const skip = (page - 1) * limit;
+
+    const [data, totalDocuments] = await Promise.all([
+      await this.model
+        .find({...(search ?? {})})
+        .limit(limit)
+        .skip(skip)
+        .sort(sort)
+        .populate(populate)
+        .exec(),
+
+      await this.model.countDocuments({...(search ?? {})}),
+    ]);
+
+    const totalPages = Math.ceil(totalDocuments / limit);
+
+    return {
+      meta: {
+        currentPage: page,
+        totalPages,
+        limit,
+        totalDocuments,
+      },
+      data,
+    };
   }
 }
 

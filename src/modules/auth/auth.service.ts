@@ -22,18 +22,108 @@ import tokenService from "../../common/utils/services/token.service";
 import {
   ACCESS_SECRET_KEY_ADMIN,
   ACCESS_SECRET_KEY_USER,
+  AWS_ACCESS_KEY,
+  AWS_REGION,
+  AWS_SECRET_ACCESS_KEY,
   REFRESH_SECRET_KEY_ADMIN,
   REFRESH_SECRET_KEY_USER,
   WEB_CLIENT_ID,
 } from "../../config/config.service";
 import {randomUUID} from "node:crypto";
 import {OAuth2Client, TokenPayload} from "google-auth-library";
+import {S3Service} from "../../common/utils/services/s3.service";
+import {StoreEnum} from "../../common/enum/multer.enum";
+import notificationService from "../../common/utils/services/notification.service";
 class AuthService {
-  private readonly _userModel = new UserRepository();
-  private readonly redisService = redisService;
-  private readonly tokenService = tokenService;
+  private readonly _userRepo = new UserRepository();
+  private readonly _redisService = redisService;
+  private readonly _tokenService = tokenService;
+  private readonly _notificationService = notificationService;
+  private readonly _s3Service = new S3Service();
 
   constructor() {}
+
+  sendEmailOtp = async ({
+    email,
+    subject,
+  }: {
+    email: string;
+    subject: EventEnum;
+  }) => {
+    const blockedTTL = await this._redisService.ttl(
+      this._redisService.blockedOtpKey({email, subject}),
+    );
+    if (blockedTTL > 0) {
+      throw new Error(
+        `You Are Blocked, Please Try Again After ${blockedTTL} Seconds`,
+        {cause: 400},
+      );
+    }
+
+    const otpTTL = await this._redisService.ttl(
+      this._redisService.otpKey({email, subject}),
+    );
+    if (otpTTL > 0) {
+      throw new Error(
+        `Old OTP Has Not Expired Yet, Please Wait ${otpTTL} Seconds`,
+      );
+    }
+
+    const maxOtp = await this._redisService.getValue(
+      this._redisService.maxOtpKey({email, subject}),
+    );
+    if (maxOtp >= 3) {
+      await this._redisService.setValue({
+        key: this._redisService.blockedOtpKey({email, subject}),
+        value: "1",
+        ttl: 60,
+      });
+
+      throw new Error(
+        "You Reach Maximum Number Of Resend OTP And You Will Be Blocked",
+        {cause: 400},
+      );
+    }
+
+    const otp = await generateOtp();
+
+    eventEmitter.emit(EventEnum.confirmEmail, async () => {
+      await sendEmail({
+        to: email,
+        subject: "Welcome To Social App",
+        html: emailTemplate({otp, subject}),
+      });
+
+      await this._redisService.setValue({
+        key: this._redisService.otpKey({email, subject}),
+        value: Hash({plainText: `${otp}`}),
+        ttl: 60 * 2,
+      });
+
+      await this._redisService.setValue({
+        key: this._redisService.maxOtpKey({email, subject}),
+        value: "1",
+        ttl: 60 * 6,
+      });
+    });
+  };
+
+  resendOtp = async (req: Request, res: Response, next: NextFunction) => {
+    const {email} = req.body;
+
+    const user = await this._userRepo.checkUserExistByEmail(email);
+
+    if (!user.confirmed) {
+      throw new Error("User Not Confirmed", {cause: 404});
+    }
+
+    await this.sendEmailOtp({email, subject: EventEnum.confirmEmail});
+    successResponse({
+      res,
+      message: "OTP Resend Successfully 🥳🥳",
+      status: 200,
+    });
+  };
 
   signup = async (req: Request, res: Response, next: NextFunction) => {
     let {
@@ -49,7 +139,7 @@ class AuthService {
       role,
     }: SignUpDto = req.body;
 
-    await this._userModel.checkEmailExist(email);
+    await this._userRepo.checkEmailExist(email);
 
     const otp = await generateOtp();
     const otpTTL = 60;
@@ -71,20 +161,26 @@ class AuthService {
         }),
       });
 
-      await redisService.setValue({
-        key: redisService.otpKey({email, subject: EventEnum.confirmEmail}),
+      await this._redisService.setValue({
+        key: this._redisService.otpKey({
+          email,
+          subject: EventEnum.confirmEmail,
+        }),
         value: Hash({plainText: `${otp}`}),
         ttl: 60,
       });
 
-      await redisService.setValue({
-        key: redisService.maxOtpKey({email, subject: EventEnum.confirmEmail}),
+      await this._redisService.setValue({
+        key: this._redisService.maxOtpKey({
+          email,
+          subject: EventEnum.confirmEmail,
+        }),
         value: "1",
         ttl: 60 * 3,
       });
     });
 
-    const user: HydratedDocument<IUser> = await this._userModel.create({
+    const user: HydratedDocument<IUser> = await this._userRepo.create({
       data: {
         firstName,
         lastName,
@@ -109,10 +205,10 @@ class AuthService {
   confirmEmail = async (req: Request, res: Response, next: NextFunction) => {
     const {email, otp}: confirmEmailDto = req.body;
 
-    await this._userModel.checkUserExistByEmail(email);
+    await this._userRepo.checkUserExistByEmail(email);
 
-    const otpValue = await redisService.getValue(
-      redisService.otpKey({email, subject: EventEnum.confirmEmail}),
+    const otpValue = await this._redisService.getValue(
+      this._redisService.otpKey({email, subject: EventEnum.confirmEmail}),
     );
 
     if (!otpValue) {
@@ -128,7 +224,7 @@ class AuthService {
       throw new AppError("OTP Not Correct 😔", 400);
     }
 
-    await this._userModel.findOneAndUpdate({
+    await this._userRepo.findOneAndUpdate({
       filter: {
         email,
         confirmed: {$exists: false},
@@ -137,8 +233,8 @@ class AuthService {
       update: {confirmed: true},
     });
 
-    redisService.deleteKey(
-      redisService.otpKey({email, subject: EventEnum.confirmEmail}),
+    this._redisService.deleteKey(
+      this._redisService.otpKey({email, subject: EventEnum.confirmEmail}),
     );
 
     successResponse({
@@ -149,9 +245,9 @@ class AuthService {
   };
 
   signIn = async (req: Request, res: Response, next: NextFunction) => {
-    const {email, password}: SignInDto = req.body;
+    const {email, password, fcm}: SignInDto = req.body;
 
-    const user = await this._userModel.checkUserExistByEmail(email);
+    const user = await this._userRepo.checkUserExistByEmail(email);
     if (!user.confirmed) {
       throw new AppError("You Are Not Confirmed", 400);
     }
@@ -166,7 +262,7 @@ class AuthService {
 
     const uuid = randomUUID();
 
-    const access_token = tokenService.GenerateToken({
+    const access_token = this._tokenService.GenerateToken({
       payload: {_id: user.id},
       secretKey:
         user?.role == RoleEnum.user
@@ -178,7 +274,7 @@ class AuthService {
       },
     });
 
-    const refresh_token = tokenService.GenerateToken({
+    const refresh_token = this._tokenService.GenerateToken({
       payload: {_id: user.id},
       secretKey:
         user?.role == RoleEnum.user
@@ -189,6 +285,18 @@ class AuthService {
         jwtid: uuid,
       },
     });
+
+    if (fcm) {
+      await this._redisService.addFCM({userId: user._id, FCMToken: fcm});
+      const tokens = await this._redisService.getFCMs(user._id);
+      await this._notificationService.sendNotifications({
+        tokens,
+        data: {
+          title: "LOGIN SUCCESSFULLY !",
+          body: "Enjoy Using Application 🥳",
+        },
+      });
+    }
 
     successResponse({
       res,
@@ -204,7 +312,7 @@ class AuthService {
   updatePassword = async (req: Request, res: Response, next: NextFunction) => {
     const {oldPassword, newPassword}: updatePasswordDto = req.body;
 
-    await this._userModel.checkUserExistById(req.user._id);
+    await this._userRepo.checkUserExistById(req.user._id);
     if (
       !compare_match({
         plainText: oldPassword,
@@ -237,14 +345,16 @@ class AuthService {
         req.user.changeCredential = new Date();
         await req.user.save();
 
-        await redisService.deleteKey(
-          await redisService.keys(redisService.getKeyUserId(req.user._id)),
+        await this._redisService.deleteKey(
+          await this._redisService.keys(
+            this._redisService.getKeyUserId(req.user._id),
+          ),
         );
         break;
 
       default:
-        await redisService.setValue({
-          key: redisService.revokeKey({
+        await this._redisService.setValue({
+          key: this._redisService.revokeKey({
             userId: req.user._id,
             jti: req.verify.jti!,
           }),
@@ -263,31 +373,31 @@ class AuthService {
 
   signUpWithGmail = async (req: Request, res: Response, next: NextFunction) => {
     const {idToken} = req.body;
+
     const client = new OAuth2Client();
     const ticket = await client.verifyIdToken({
       idToken,
       audience: WEB_CLIENT_ID!,
     });
-    const payload: Partial<TokenPayload> | undefined = ticket.getPayload();
-
-    const {email, email_verified, name, picture} = payload!;
+    const payload = ticket.getPayload() as TokenPayload;
+    const {email, email_verified, given_name, family_name, picture} = payload!;
 
     if (!email) {
       throw new AppError("Invalid Google Token", 400);
     }
-    let user = await this._userModel.findOne({
+    let user = await this._userRepo.findOne({
       filter: {email},
     });
 
     if (!user) {
-      user = await this._userModel.create({
+      user = await this._userRepo.create({
         data: {
-          email,
-          confirmed: email_verified,
-          userName: name,
-          profilePicture: picture,
-          provider: ProviderEnum.google,
-        } as Partial<IUser>,
+          email: email!,
+          confirmed: email_verified!,
+          firstName: given_name!,
+          lastName: family_name!,
+          provider: ProviderEnum.google!,
+        },
       });
     }
     if (user.provider == ProviderEnum.local) {
@@ -295,13 +405,13 @@ class AuthService {
     }
 
     // SignIn Steps
-    const access_token = tokenService.GenerateToken({
+    const access_token = this._tokenService.GenerateToken({
       payload: {
-        id: user.id,
+        id: user._id,
         email: user.email,
       },
       secretKey:
-        req.user.role == RoleEnum.user
+        user.role == RoleEnum.user
           ? ACCESS_SECRET_KEY_USER!
           : ACCESS_SECRET_KEY_ADMIN!,
     });
@@ -311,6 +421,71 @@ class AuthService {
       message: "Sign In Successfully Enjoy 🥳",
       status: 200,
       data: {access_token},
+    });
+  };
+
+  forgetPassword = async (req: Request, res: Response, next: NextFunction) => {
+    const {email} = req.body;
+    const user = await this._userRepo.checkUserExistByEmail(email);
+    if (!user.confirmed) {
+      throw new Error("User Not Confirmed", {cause: 404});
+    }
+
+    await this.sendEmailOtp({email, subject: EventEnum.forgetPassword});
+
+    successResponse({
+      res,
+      message: "OTP For Forget Password Send Successfully 🥳🥳",
+      status: 200,
+    });
+  };
+
+  resetPassword = async (req: Request, res: Response, next: NextFunction) => {
+    const {email, password, otp} = req.body;
+
+    const otpValue = await this._redisService.getValue(
+      this._redisService.otpKey({email, subject: EventEnum.forgetPassword}),
+    );
+
+    if (!compare_match({plainText: otp, cipherText: otpValue})) {
+      throw new Error("OTP Is Expired Or Incorrect Value", {cause: 400});
+    }
+
+    await this._userRepo.findOneAndUpdate({
+      filter: {
+        email,
+        confirmed: {$exists: true},
+        provider: ProviderEnum.local,
+      },
+      update: {
+        password: Hash({plainText: password}),
+        changeCredential: new Date(),
+      },
+    });
+
+    await this._redisService.deleteKey(
+      this._redisService.otpKey({email, subject: EventEnum.forgetPassword}),
+    );
+
+    successResponse({
+      res,
+      status: 200,
+      message: "Password Reset Successfully 🥳🥳",
+    });
+  };
+
+  test = async (req: Request, res: Response, next: NextFunction) => {
+    const {ContentType, fileName} = req.body;
+    const {Key, url} = await this._s3Service.createPreSignedUrl({
+      path: `Users/${req?.user?._id}`,
+      fileName,
+      ContentType,
+    });
+
+    successResponse({
+      res,
+      status: 200,
+      data: {Key, url},
     });
   };
 }

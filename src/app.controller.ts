@@ -12,6 +12,7 @@ import authRouter from "./modules/auth/auth.controller";
 import connectDB from "./DB/connectionDB";
 import RedisService from "./common/utils/services/redis.service";
 import userRouter from "./modules/users/user.controller";
+import postRouter from "./modules/posts/post.controller";
 
 const app: express.Application = express();
 
@@ -35,6 +36,7 @@ const bootstrap = () => {
   //Routes
   app.use("/auth", authRouter);
   app.use("/user", userRouter);
+  app.use("/posts", postRouter);
 
   app.get("{/*demo}", (req: Request, res: Response, next: NextFunction) => {
     throw new AppError(

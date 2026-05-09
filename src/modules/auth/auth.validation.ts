@@ -5,14 +5,17 @@ export const signInSchema = {
   body: z.object({
     password: z.string().min(6),
     email: z.string().email(),
+    fcm: z.string().optional(),
   }),
 };
 
 export const signUpSchema = {
-  body: signInSchema.body
-    .extend({
+  body: z
+    .strictObject({
       firstName: z.string().min(3),
       lastName: z.string().min(3),
+      password: z.string().min(6),
+      email: z.string().email(),
       phone: z.string().length(11).optional(),
       cPassword: z.string().min(6),
       address: z.string().min(6).optional(),

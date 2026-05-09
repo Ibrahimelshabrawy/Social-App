@@ -12,7 +12,7 @@
     // "types": [],
     // For nodejs:
     // "lib": ["esnext"],
-    "types": ["node" , "express"],
+    "types": ["node" , "express" , "multer"],
     // and npm install -D @types/node
 
     // Other Outputs

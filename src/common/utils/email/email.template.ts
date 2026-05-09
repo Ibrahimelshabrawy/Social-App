@@ -7,7 +7,7 @@ export const emailTemplate = ({
 }: {
   otp: number;
   subject?: EventEnum;
-  expireAt: string;
+  expireAt?: string;
 }) => {
   return `<!doctype html>
 <html>
