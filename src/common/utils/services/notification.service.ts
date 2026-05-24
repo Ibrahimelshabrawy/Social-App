@@ -46,7 +46,7 @@ class NotificationService {
       body: string;
     };
   }) {
-    Promise.all(
+    return await Promise.all(
       tokens.map((token) => {
         return this.sendNotification({token, data});
       }),

@@ -13,3 +13,9 @@ export enum ProviderEnum {
 export enum LogOutEnum {
   all = "all",
 }
+
+export enum FriendRequestStatusEnum {
+  pending = "pending",
+  accepted = "accepted",
+  rejected = "rejected",
+}

@@ -473,21 +473,6 @@ class AuthService {
       message: "Password Reset Successfully 🥳🥳",
     });
   };
-
-  test = async (req: Request, res: Response, next: NextFunction) => {
-    const {ContentType, fileName} = req.body;
-    const {Key, url} = await this._s3Service.createPreSignedUrl({
-      path: `Users/${req?.user?._id}`,
-      fileName,
-      ContentType,
-    });
-
-    successResponse({
-      res,
-      status: 200,
-      data: {Key, url},
-    });
-  };
 }
 
 export default new AuthService();

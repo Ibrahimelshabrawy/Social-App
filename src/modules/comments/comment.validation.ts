@@ -2,18 +2,18 @@ import * as z from "zod";
 import {
   AllowCommentEnum,
   AvailabilityEnum,
+  OnModelEnum,
   ReactEnum,
 } from "../../common/enum/post.enum";
 import {generalRules} from "../../common/utils/generalRules";
 
-export const createPostSchema = {
+export const createCommentSchema = {
   body: z
     .object({
       content: z.string().optional(),
       attachments: z.array(generalRules.file).optional(),
       tags: z.array(generalRules.id).optional(),
-      availability: z.enum(AvailabilityEnum).default(AvailabilityEnum.public),
-      allowComments: z.enum(AllowCommentEnum).default(AllowCommentEnum.allow),
+      onModel: z.enum(OnModelEnum),
     })
     .superRefine((args, ctx) => {
       if (!args.content && !args.attachments?.length) {
@@ -35,15 +35,13 @@ export const createPostSchema = {
         }
       }
     }),
-};
-
-export const CheckPostIdSchema = {
-  params: z.object({
+  params: z.strictObject({
     postId: generalRules.id,
+    commentId: generalRules.id.optional(),
   }),
 };
 
-export const updatePostSchema = {
+export const updateCommentSchema = {
   body: z
     .object({
       content: z.string().optional(),
@@ -51,8 +49,6 @@ export const updatePostSchema = {
       removeAttachments: z.array(z.string()).optional(),
       tags: z.array(generalRules.id).optional(),
       removeTags: z.array(z.string()).optional(),
-      availability: z.enum(AvailabilityEnum).default(AvailabilityEnum.public),
-      allowComments: z.enum(AllowCommentEnum).default(AllowCommentEnum.allow),
     })
     .superRefine((args, ctx) => {
       if (args?.tags) {
@@ -68,13 +64,15 @@ export const updatePostSchema = {
     }),
 
   params: z.strictObject({
+    commentId: generalRules.id,
     postId: generalRules.id,
   }),
 };
 
-export const reactPostSchema = {
+export const reactCommentSchema = {
   params: z.object({
     postId: generalRules.id,
+    commentId: generalRules.id,
   }),
   body: z.object({
     reactType: z.enum(ReactEnum),

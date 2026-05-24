@@ -13,6 +13,18 @@ import connectDB from "./DB/connectionDB";
 import RedisService from "./common/utils/services/redis.service";
 import userRouter from "./modules/users/user.controller";
 import postRouter from "./modules/posts/post.controller";
+import {createHandler} from "graphql-http/lib/use/express";
+import {
+  GraphQLEnumType,
+  GraphQLInt,
+  GraphQLList,
+  GraphQLNonNull,
+  GraphQLObjectType,
+  GraphQLSchema,
+  GraphQLString,
+} from "graphql";
+import storyRouter from "./modules/stories/story.controller";
+import friendRouter from "./modules/friends/friends.controller";
 
 const app: express.Application = express();
 
@@ -37,6 +49,84 @@ const bootstrap = () => {
   app.use("/auth", authRouter);
   app.use("/user", userRouter);
   app.use("/posts", postRouter);
+  app.use("/story", storyRouter);
+  app.use("/friends", friendRouter);
+
+  // let users = [
+  //   {
+  //     id: 1,
+  //     name: "John Doe",
+  //     age: 30,
+  //     gender: "male",
+  //   },
+  //   {
+  //     id: 2,
+  //     name: "Jane Doe",
+  //     age: 25,
+  //     gender: "male",
+  //   },
+  //   {
+  //     id: 3,
+  //     name: "Bob Smith",
+  //     age: 40,
+  //     gender: "male",
+  //   },
+  // ];
+
+  // let GenderType = new GraphQLEnumType({
+  //   name: "Gender",
+  //   values: {
+  //     male: {value: "male"},
+  //     female: {value: "female"},
+  //   },
+  // });
+
+  // let userType = new GraphQLObjectType({
+  //   name: "User",
+  //   fields: {
+  //     id: {type: new GraphQLNonNull(GraphQLInt)},
+  //     name: {type: new GraphQLNonNull(GraphQLString)},
+  //     age: {type: new GraphQLNonNull(GraphQLInt)},
+  //     gender: {type: new GraphQLNonNull(GenderType)},
+  //   },
+  // });
+
+  // const schema = new GraphQLSchema({
+  //   query: new GraphQLObjectType({
+  //     name: "Query",
+  //     fields: {
+  //       users: {
+  //         type: new GraphQLList(userType),
+  //         resolve: () => users,
+  //       },
+  //     },
+  //   }),
+  //   mutation: new GraphQLObjectType({
+  //     name: "Mutation",
+  //     fields: {
+  //       createUser: {
+  //         type: userType,
+  //         args: {
+  //           id: {type: new GraphQLNonNull(GraphQLInt)},
+  //           name: {type: new GraphQLNonNull(GraphQLString)},
+  //           age: {type: new GraphQLNonNull(GraphQLInt)},
+  //           gender: {type: new GraphQLNonNull(GenderType)},
+  //         },
+  //         resolve: (parent, args) => {
+  //           const {id, name, age, gender} = args;
+  //           const userExist = users.find((user) => user.id === id);
+  //           if (userExist) {
+  //             throw new AppError(`User with id ${id} already exists`, 400);
+  //           }
+  //           users.push(args);
+  //           return args;
+  //         },
+  //       },
+  //     },
+  //   }),
+  // });
+
+  // app.use("/graphql", createHandler({schema}));
 
   app.get("{/*demo}", (req: Request, res: Response, next: NextFunction) => {
     throw new AppError(

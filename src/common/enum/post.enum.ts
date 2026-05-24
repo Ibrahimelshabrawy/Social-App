@@ -9,7 +9,15 @@ export enum AvailabilityEnum {
   onlyMe = "onlyMe",
 }
 
-export enum LikeEnum {
+export enum ReactEnum {
   like = "like",
-  disLike = "disLike",
+  love = "love",
+  haha = "haha",
+  wow = "wow",
+  sad = "sad",
+  angry = "angry",
+}
+export enum OnModelEnum {
+  Post = "Post",
+  Comment = "Comment",
 }

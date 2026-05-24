@@ -48,11 +48,15 @@ abstract class BaseRepository<TDocument> {
     projection?: ProjectionType<TDocument>;
     options?: QueryOptions<TDocument>;
   }): Promise<HydratedDocument<TDocument> | null> {
-    return this.model
+    const query = this.model
       .findOne(filter, projection)
       .sort(options?.sort)
       .select(projection!)
       .populate(options?.populate as PopulateOptions | PopulateOptions[]);
+    if (options?.lean) {
+      query.lean();
+    }
+    return query.exec();
   }
 
   async findById({
@@ -64,11 +68,15 @@ abstract class BaseRepository<TDocument> {
     projection?: ProjectionType<TDocument>;
     options?: QueryOptions<TDocument>;
   }): Promise<HydratedDocument<TDocument> | null> {
-    return this.model
+    const query = this.model
       .findById(id, projection)
       .populate(options?.populate as PopulateOptions | PopulateOptions[])
-      .select(projection!)
-      .exec();
+      .select(projection!);
+
+    if (options?.lean) {
+      query.lean();
+    }
+    return query.exec();
   }
 
   async findOneAndUpdate({
@@ -190,6 +198,21 @@ abstract class BaseRepository<TDocument> {
       },
       data,
     };
+  }
+  async updateMany({
+    filter,
+    update,
+  }: {
+    filter: QueryFilter<TDocument>;
+    update: UpdateQuery<TDocument>;
+  }) {
+    return this.model.updateMany(filter, update);
+  }
+  async deleteMany({filter}: {filter: QueryFilter<TDocument>}) {
+    return this.model.deleteMany(filter);
+  }
+  async deleteOne({filter}: {filter: QueryFilter<TDocument>}) {
+    return this.model.deleteOne(filter);
   }
 }
 

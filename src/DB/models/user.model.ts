@@ -16,6 +16,7 @@ export interface IUser {
   role?: RoleEnum;
   confirmed?: Boolean;
   friends?: Types.ObjectId[];
+  savedPosts?: Types.ObjectId[];
 
   changeCredential: Date;
   createdAt: Date;
@@ -74,6 +75,12 @@ const userSchema = new Schema<IUser>(
       type: [Types.ObjectId],
       ref: "User",
     },
+    savedPosts: [
+      {
+        type: Types.ObjectId,
+        ref: "Post",
+      },
+    ],
     confirmed: Boolean,
     changeCredential: Date,
     age: Number,

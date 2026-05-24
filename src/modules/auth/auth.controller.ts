@@ -34,6 +34,5 @@ authRouter.post(
 
 authRouter.post("/logout", authentication, authService.logout);
 authRouter.post("/signup/gmail", authService.signUpWithGmail);
-authRouter.post("/test", authentication, authService.test);
 
 export default authRouter;

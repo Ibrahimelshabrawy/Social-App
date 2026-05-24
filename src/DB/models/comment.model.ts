@@ -1,14 +1,10 @@
-import mongoose, {Query, Schema, Types} from "mongoose";
-import {
-  AllowCommentEnum,
-  AvailabilityEnum,
-  OnModelEnum,
-  ReactEnum,
-} from "../../common/enum/post.enum";
-import CommentModel, {IComment} from "./comment.model";
+import mongoose, {Schema, Types} from "mongoose";
+import {OnModelEnum, ReactEnum} from "../../common/enum/post.enum";
 import {S3Service} from "../../common/utils/services/s3.service";
-// import type {NextFunction} from "express";
-export interface IPost {
+import {AppError} from "../../common/utils/global-error-handling";
+import {Query} from "mongoose";
+
+export interface IComment {
   content?: string;
   attachments?: string[];
 
@@ -18,16 +14,15 @@ export interface IPost {
     userId: Types.ObjectId;
     reactType: ReactEnum;
   }[];
-  allowComments?: AllowCommentEnum;
-  availability?: AvailabilityEnum;
-
+  refId: Types.ObjectId;
+  onModel: OnModelEnum;
   folderId: string;
   isDeleted?: boolean;
   deletedAt?: Date | undefined;
   deletedBy: Types.ObjectId | undefined;
 }
 
-const PostSchema = new Schema<IPost>(
+const CommentSchema = new Schema<IComment>(
   {
     content: {
       type: String,
@@ -62,15 +57,16 @@ const PostSchema = new Schema<IPost>(
       },
     ],
 
-    allowComments: {
-      type: String,
-      enum: AllowCommentEnum,
-      default: AllowCommentEnum.allow,
+    refId: {
+      type: Types.ObjectId,
+      refPath: "onModel",
+      required: true,
     },
-    availability: {
+
+    onModel: {
       type: String,
-      enum: AvailabilityEnum,
-      default: AvailabilityEnum.public,
+      enum: OnModelEnum,
+      required: true,
     },
 
     folderId: String,
@@ -93,7 +89,7 @@ const PostSchema = new Schema<IPost>(
   },
 );
 
-PostSchema.virtual("comments", {
+CommentSchema.virtual("replies", {
   ref: "Comment",
   localField: "_id",
   foreignField: "refId",
@@ -101,25 +97,24 @@ PostSchema.virtual("comments", {
 
 const s3Service = new S3Service();
 
-PostSchema.pre("findOneAndDelete", async function () {
-  const post = await this.model.findOne(this.getFilter());
-  if (post) {
-    const comments = await CommentModel.find({
-      refId: post._id,
-      onModel: OnModelEnum.Post,
-    } as any);
+CommentSchema.pre("deleteOne", {document: true}, async function () {
+  const replies = await mongoose.models.Comment?.find({
+    refId: this._id,
+    onModel: OnModelEnum.Comment,
+  });
+  if (!replies) {
+    throw new AppError("No Replies Exist", 400);
+  }
+  for (const reply of replies) {
+    await reply.deleteOne();
+  }
 
-    for (const comment of comments) {
-      await comment.deleteOne();
-    }
-
-    if (post.attachments?.length) {
-      await s3Service.deleteFiles(post.attachments);
-    }
+  if (this?.attachments?.length) {
+    await s3Service.deleteFiles(this.attachments);
   }
 });
 
-const PostModel =
-  mongoose.models.Post || mongoose.model<IPost>("Post", PostSchema);
+const CommentModel =
+  mongoose.models.Comment || mongoose.model<IComment>("Comment", CommentSchema);
 
-export default PostModel;
+export default CommentModel;
