@@ -19,17 +19,28 @@ import storyRouter from "./modules/stories/story.controller";
 import friendRouter from "./modules/friends/friends.controller";
 import {gql_schema} from "./modules/graphql/graphql.schema";
 import {authentication_gql} from "./common/middlewares/authentication.middleware";
+import socketGateway from "./modules/real-time/socket.gateway";
+import {S3Service} from "./common/utils/services/s3.service";
+import {pipeline} from "node:stream/promises";
+import chatRouter from "./modules/chat/chat.controller";
 
 const app: express.Application = express();
 
-const bootstrap = () => {
+const bootstrap = async () => {
   const limiter = rateLimit({
     windowMs: 5 * 60 * 100,
     limit: 100,
   });
   app.use(express.json());
-  app.use(cors({origin: "*"}), helmet(), limiter);
-
+  app.use(
+    cors({origin: "*"}),
+    helmet({
+      crossOriginResourcePolicy: {
+        policy: "cross-origin",
+      },
+    }),
+    limiter,
+  );
   connectDB();
   RedisService.connectRedis();
 
@@ -39,12 +50,50 @@ const bootstrap = () => {
     }),
   );
 
+  app.get(
+    "/upload/*path",
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const {path} = req.params as {path: string[]};
+        const key = path.join("/");
+        const {download} = req.query;
+
+        const result = await new S3Service().getFile(key);
+
+        if (!result.Body) {
+          return next(new AppError("File Not Found", 404));
+        }
+
+        res.setHeader(
+          "Content-Type",
+          result.ContentType || "application/octet-stream",
+        );
+
+        if (download === "true") {
+          res.setHeader(
+            "Content-Disposition",
+            `attachment; filename="${path.at(-1)}"`,
+          );
+        }
+
+        await pipeline(result.Body as NodeJS.ReadableStream, res);
+      } catch (error) {
+        if (res.headersSent) {
+          return;
+        }
+
+        next(error);
+      }
+    },
+  );
+
   //Routes
   app.use("/auth", authRouter);
   app.use("/user", userRouter);
   app.use("/posts", postRouter);
   app.use("/story", storyRouter);
   app.use("/friends", friendRouter);
+  app.use("/chat", chatRouter);
 
   app.use(
     "/graphql",
@@ -60,7 +109,11 @@ const bootstrap = () => {
   });
 
   app.use(globalErrorHandling);
-  app.listen(PORT, () => console.log(`Social app listening on PORT ${PORT}!`));
+  const httpServer = app.listen(PORT, () =>
+    console.log(`Social app listening on PORT ${PORT}!`),
+  );
+
+  await socketGateway.InitIo(httpServer);
 };
 
 export default bootstrap;

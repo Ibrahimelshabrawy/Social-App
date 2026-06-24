@@ -301,7 +301,7 @@ class AuthService {
     successResponse({
       res,
       status: 200,
-      message: "Sign In Successfully 🥳🥳",
+      message: "Done",
       data: {
         access_token,
         refresh_token,

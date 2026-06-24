@@ -5,6 +5,7 @@ export interface IUser {
   _id: Types.ObjectId;
   firstName: string;
   lastName: string;
+  userName: string;
   age: number;
   email: string;
   password: string;

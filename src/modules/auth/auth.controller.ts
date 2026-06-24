@@ -5,7 +5,10 @@ import * as authValidation from "./auth.validation";
 import {authentication} from "../../common/middlewares/authentication.middleware";
 import {multerCloud} from "../../common/middlewares/multer";
 import {MulterEnum, StoreEnum} from "../../common/enum/multer.enum";
+import chatRouter from "../chat/chat.controller";
 const authRouter = Router();
+
+authRouter.use("/:userId/chat", chatRouter);
 
 authRouter.post(
   "/signup",

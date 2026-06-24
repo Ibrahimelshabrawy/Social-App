@@ -28,7 +28,7 @@ class UserRepository extends BaseRepository<IUser> {
     return user;
   }
 
-  async checkUserExistById(id: Types.ObjectId) {
+  async checkUserExistById(id: Types.ObjectId | string) {
     const user = await this.findById({
       id,
     });

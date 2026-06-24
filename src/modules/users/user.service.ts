@@ -6,19 +6,38 @@ import PostRepository from "../../DB/repositories/post.repository";
 import {AppError} from "../../common/utils/global-error-handling";
 import {Types} from "mongoose";
 import {OnModelEnum} from "../../common/enum/post.enum";
+import ChatRepository from "../../DB/repositories/chat.repository";
 
 class UserService {
   private readonly _userRepo = new UserRepository();
   private readonly _postRepo = new PostRepository();
   private readonly _commentRepo = new CommentRepository();
+  private readonly _chatRepo = new ChatRepository();
 
   constructor() {}
 
   getProfile = async (req: Request, res: Response, next: NextFunction) => {
+    const user = await this._userRepo.findOne({
+      filter: {_id: req.user?._id as Types.ObjectId},
+      options: {
+        populate: [
+          {
+            path: "friends",
+          },
+        ],
+      },
+    });
+
+    const groups = await this._chatRepo.find({
+      filter: {
+        participants: {$in: [req.user._id!]},
+        group: {$exists: true},
+      },
+    });
     successResponse({
       res,
       message: "User Profile Is Here 🥳",
-      data: req.user,
+      data: {user, groups},
     });
   };
 
