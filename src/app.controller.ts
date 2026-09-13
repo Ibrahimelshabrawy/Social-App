@@ -18,7 +18,6 @@ import {createHandler} from "graphql-http/lib/use/express";
 import storyRouter from "./modules/stories/story.controller";
 import friendRouter from "./modules/friends/friends.controller";
 import {gql_schema} from "./modules/graphql/graphql.schema";
-import {authentication_gql} from "./common/middlewares/authentication.middleware";
 import socketGateway from "./modules/real-time/socket.gateway";
 import {S3Service} from "./common/utils/services/s3.service";
 import {pipeline} from "node:stream/promises";
@@ -95,11 +94,11 @@ const bootstrap = async () => {
   app.use("/friends", friendRouter);
   app.use("/chat", chatRouter);
 
-  app.use(
-    "/graphql",
-    authentication_gql,
-    createHandler({schema: gql_schema, context: (req) => ({req})}),
-  );
+  // app.use(
+  //   "/graphql",
+  //   authentication_gql,
+  //   createHandler({schema: gql_schema, context: (req) => ({req})}),
+  // );
 
   app.get("{/*demo}", (req: Request, res: Response, next: NextFunction) => {
     throw new AppError(
