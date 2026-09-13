@@ -2,4 +2,3 @@
 /*.env
 src/config/socialapp-9dc81-firebase-adminsdk-fbsvc-aa446e27ff.json
 /dist
-/dist/app.controller.js
